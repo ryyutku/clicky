@@ -1,0 +1,65 @@
+# Central config - single source of truth so notebook + scripts agree.
+# Keep secrets out of here (use .env for any API tokens, e.g. HF_TOKEN).
+
+project:
+  name: "vlm-gui-grounding"
+  seed: 42
+
+hardware:
+  device: "cuda"        # falls back to cpu automatically if unavailable
+  vram_budget_gb: 8      # RTX 5050 8GB - drives batch size / quantization choices
+
+model:
+  base_model_id: "microsoft/Florence-2-base"
+  backup_model_ids:
+    - "Qwen/Qwen2-VL-2B-Instruct"
+    - "vikhyatk/moondream2"
+  trust_remote_code: true
+  task_prompt: "<OPEN_VOCABULARY_DETECTION>"   # Florence-2 grounding task token; confirm against model card in Week 1
+
+qlora:
+  load_in_4bit: true
+  bnb_4bit_quant_type: "nf4"
+  bnb_4bit_compute_dtype: "bfloat16"
+  lora_r: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  target_modules: ["q_proj", "v_proj"]   # revisit once Florence-2 module names are confirmed in Week 1
+
+data:
+  screenspot:
+    hf_repo: "rootsautomation/ScreenSpot"   # verify exact repo name/availability in Week 1; mirrors exist, see note below
+    cache_dir: "data/screenspot"
+    subset_fraction: 1.0   # can downsample later if local disk/VRAM gets tight
+  self_collected:
+    raw_dir: "data/raw"
+    annotations_dir: "data/annotations"
+    target_count_min: 150
+    target_count_max: 300
+  ood_test:
+    dir: "data/ood_test"
+  splits:
+    train: 0.8
+    val: 0.1
+    test: 0.1
+
+preprocessing:
+  canny_low: 50
+  canny_high: 150
+  resize_long_side: 1024
+  tiling:
+    enabled: false   # flip on when testing small-element tiling ablation (Week 4)
+    tile_size: 512
+    overlap: 64
+
+training:
+  epochs: 3
+  batch_size: 4
+  grad_accum_steps: 4
+  lr: 1e-4
+  warmup_ratio: 0.03
+  output_dir: "checkpoints"
+
+eval:
+  metrics: ["click_accuracy", "iou", "latency_ms"]
+  categories: ["button", "text_field", "icon", "menu", "checkbox"]

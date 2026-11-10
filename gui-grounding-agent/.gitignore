@@ -1,0 +1,27 @@
+# Data & model artifacts (too large / regenerable - don't commit)
+data/raw/*
+data/processed/*
+data/screenspot/*
+data/annotations/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/screenspot/.gitkeep
+!data/annotations/.gitkeep
+!data/ood_test/
+checkpoints/*
+!checkpoints/.gitkeep
+results/
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+*.egg-info/
+.venv/
+venv/
+
+# Env / secrets
+.env
+
+# OS
+.DS_Store

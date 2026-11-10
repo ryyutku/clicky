@@ -1,0 +1,99 @@
+Project Brief: VLM-Based GUI Grounding Agent (CM4610 Machine Vision, Part B)
+1. Coursework context
+Module: CM4610 Machine Vision, RGU. Part B (50% of the module) is the implementation of a vision system.
+Requirement: a practical machine vision application with an AI solution using deep learning.
+Deliverables:
+Jupyter notebook (.ipynb) with a working prototype (input data, technique, output results).
+Report (Word or PDF, 8000-word limit; going over by more than 10% drops the grade).
+Compulsory viva (missing it means a Fail for the coursework).
+Report must include: literature survey, high-level architecture diagram, data source and preparation, working prototype, and evaluation with appropriate metrics.
+Grading weight: 40 of 45 Part B subgrades are for implementation (appropriate libraries, justification of deep learning models, code understanding). The rest cover literature (5), evaluation (5) and report (10).
+Lecturer’s emphasis: the vision techniques used (e.g. edge detection), how data was preprocessed, and how the dataset was created and the model trained.
+GenAI rule: allowed, but I must report in detail how it was used. The implementation must be my own and I must defend every line in the viva. Generative AI text is acceptable in the literature survey if sources are included.
+Hardware: laptop with an RTX 5050 (8GB VRAM), so everything must train and run locally.
+Deadline check: the brief I have says Part B is due 8 Jan 2026, which looks like last year’s template. I need to confirm the real deadline on Moodle and plan backwards from it.
+2. Project summary
+
+I’m building a local, open-weight, VLM-powered agent that takes a screenshot and a natural-language instruction (e.g. “click the Downloads folder”), localizes the target UI element as a bounding box or point, and executes the click. The research task is called GUI grounding. Related work includes ScreenSpot, SeeClick, UGround, OS-Atlas, ShowUI and CogAgent. The project is a scoped-down version of the idea behind products like HeyClicky, focused on the computer-vision core (grounding) rather than a full autonomous agent.
+
+3. Research gap and hypotheses
+
+Does combining classical computer-vision preprocessing (edge and contour-based candidate region proposals) with a fine-tuned small VLM improve GUI grounding accuracy and robustness, especially on small UI elements, compared to the fine-tuned VLM alone? And does the result hold on out-of-distribution, adversarially styled UI elements (CAPTCHA-style checkboxes) the model never trained on?
+
+H1 (ablation): classical preprocessing aid improves grounding accuracy, particularly for small elements.
+H2 (generalization): a model fine-tuned on standard app and web UI transfers imperfectly to adversarial or stylized UI.
+4. Scope
+
+In scope
+
+Supervised fine-tuning of a small VLM for grounding.
+Classical CV preprocessing module (Canny/Sobel, contour analysis).
+Self-collected, annotated dataset plus a ScreenSpot subset.
+Action layer: screenshot capture, coordinate scaling, click and type, Bézier mouse movement.
+Scripted multi-step demo (see section 8).
+
+Out of scope, to be stated explicitly in the report
+
+Autonomous task planning.
+Reinforcement learning (PPO/GRPO). It needs a resettable simulated environment and a sparse reward, is sample-inefficient, and has no clean dataset story. It goes in future work.
+Payments, ordering, logins or credentials.
+Any testing against live reCAPTCHA or hCaptcha. Only self-built HTML test pages are used.
+Slider and image-grid CAPTCHAs. These are separate task shapes and are not part of this project.
+5. Technical approach
+Model: Florence-2-base (~0.23B parameters), which supports grounding natively. Backup options are Qwen2-VL-2B (stronger zero-shot grounding) and Moondream2 (easiest to run).
+Training method: QLoRA (4-bit quantization with LoRA adapters) using transformers, peft, bitsandbytes and accelerate.
+Why supervised fine-tuning, not RL: every example has an exact ground-truth box, so a direct loss (cross-entropy on location tokens, with IoU or L1 as evaluation and diagnostics) is simpler, more stable and more sample-efficient.
+Classical preprocessing aid: Canny/Sobel edges, then contour extraction, then candidate UI-element boxes. These feed the VLM as crop hints or overlays, or are used to snap and re-rank its predictions. The exact integration method is a design decision to settle in Week 3 and justify in the report.
+Optional agentic layer: a perceive, reason, act, observe loop where the model proposes the next action from a small allowed set. This is inference-time prompting, not a trained policy. Fixed scripted sequences are the fallback if it proves unreliable.
+6. Pipeline (for the architecture diagram)
+
+Screenshot capture (mss) → classical preprocessing (edges, contours, candidate regions) → VLM grounding inference (instruction + image → box or point) → post-processing (map coordinates back to real screen resolution, NMS if needed) → action execution (pyautogui, Bézier movement) → verification (re-screenshot and diff for success or failure logging).
+
+7. Data
+Public base: a ScreenSpot subset (web, mobile and desktop screenshots with instruction, element and bounding-box triples).
+Self-collected: 150-300 screenshots covering file explorer, browser (including the two sites used in the demo), and settings menus. Each has several instruction-box annotations, made with labelImg or a small OpenCV click-to-box script (which I can document as a preprocessing utility).
+OOD test set: self-built HTML pages with CAPTCHA-style checkboxes. These are never used in training.
+Splits: train, val and test, with the split rationale documented. Preprocessing covers resizing and normalization, coordinate scaling, instruction formatting into the model’s input format, and optional tiling for small elements.
+8. Demo task
+
+A fixed, scripted sequence where the VLM grounds each step:
+
+File navigation: open a folder, find a file, open it.
+Browser task: go between two websites, copy a list of links from site A, paste them into site B, and click download. (Text extraction here is OCR or DOM-free text copy, a separate technique from grounding, and the report will say so.)
+Checkbox test page: locate and click the checkbox.
+9. Experiments and metrics
+Click accuracy (prediction falls inside the ground-truth box), the standard ScreenSpot metric, so I can compare to published numbers.
+IoU against ground-truth boxes.
+Zero-shot vs fine-tuned comparison (the main chart).
+Ablations: with and without classical preprocessing, image resolution, tiling for small elements.
+Per-category breakdown: buttons, text fields, icons, menus. Small elements are expected to be hardest.
+OOD test: checkbox-page accuracy for zero-shot vs fine-tuned.
+Inference latency on the 8GB GPU, plus honest failure analysis.
+10. Roadmap
+Week	Focus	Deliverable
+1	Environment, Florence-2 inference, ScreenSpot download, zero-shot baseline	Inference script and baseline table
+2	Capture and annotate own data, build splits, preprocessing pipeline	Documented dataset
+3	Classical CV module (edges, contours, candidate boxes), tested standalone	Module with example figures
+4	QLoRA fine-tuning: two runs (VLM alone, VLM + classical aid)	Checkpoints and training curves
+5	Full evaluation (H1, H2), action layer, scripted demo	Results tables and plots, working demo
+6	Report, backup demo video, viva prep	Report, notebook, video
+Buffer	3-4 days inside Weeks 4-5	Fine-tuning retries
+
+Plan the two training runs from the start, and start fine-tuning in Week 4 at the latest.
+
+11. Risks
+QLoRA setup friction: fall back to Moondream2 or Qwen2-VL-2B. Florence-2 may need a specific transformers version and trust_remote_code, so pin versions early.
+Small UI elements: expect low accuracy, which is a finding rather than a failure, as long as I analyze it.
+Annotation time: 300-500 annotations take real hours, so start in Week 1-2.
+Live demo failure: record a backup video.
+Scope creep: the planner, RL, ordering and slider/grid CAPTCHAs stay out.
+12. Viva preparation
+
+I should be able to explain, line by line: why QLoRA and what quantization trades off, why Florence-2 over alternatives, why SFT over RL, how the loss works, why the chosen preprocessing method, what each metric means, and how the dataset was built. Keep notes on AI usage throughout for the required GenAI report.
+
+13. Decisions already made
+GUI agent over the CAPTCHA-solver idea (broader, more defensible, and CAPTCHA checkboxes become an evaluation case).
+Supervised fine-tuning over PPO/GRPO.
+Scripted sequences over autonomous planning.
+No payments or ordering automation.
+Self-built test pages only, never live CAPTCHAs.
